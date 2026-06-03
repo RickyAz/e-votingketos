@@ -56,87 +56,97 @@
 
         let nisPemilih = "";
 
-        function verifikasiDanMuatKandidat() {
-            const inputNis = document.getElementById('nis').value.trim();
-            if(!inputNis) return alert('Silakan masukkan NIS Anda terlebih dahulu!');
+function verifikasiDanMuatKandidat() {
+    const inputNis = document.getElementById('nis').value.trim();
+    if(!inputNis) return alert('Silakan masukkan NIS Anda terlebih dahulu!');
+    
+    nisPemilih = inputNis;
+    const btn = document.getElementById('btn-masuk');
+    btn.innerText = "Memverifikasi...";
+    btn.disabled = true;
+
+    // Menambahkan parameter acak (?t=...) di ujung URL untuk menghancurkan cache browser lama
+    const urlDenganAntiCache = GAS_VOTING_URL + "?t=" + new Date().getTime();
+
+    fetch(urlDenganAntiCache)
+    .then(res => {
+        if(!res.ok) throw new Error("Koneksi ditolak oleh server Google (CORS/Auth Error).");
+        return res.json();
+    })
+    .then(res => {
+        if(res.success) {
+            document.getElementById('display-nis').innerText = `NIS Pemilih: ${nisPemilih}`;
+            let htmlCard = "";
             
-            nisPemilih = inputNis;
-            const btn = document.getElementById('btn-masuk');
-            btn.innerText = "Memverifikasi...";
-            btn.disabled = true;
+            if(res.data.length === 0) {
+                alert("Peringatan: Data kandidat di Google Sheets masih kosong!");
+                return;
+            }
 
-            // Ambil data kandidat ke server
-            fetch(GAS_VOTING_URL)
-            .then(res => {
-                if(!res.ok) throw new Error("Gagal terhubung ke server database.");
-                return res.json();
-            })
-            .then(res => {
-                if(res.success) {
-                    document.getElementById('display-nis').innerText = `NIS Pemilih: ${nisPemilih}`;
-                    let htmlCard = "";
-                    
-                    res.data.forEach(paslon => {
-                        htmlCard += `
-                            <div class="bg-white border border-slate-200/80 rounded-2xl p-6 shadow-sm hover:shadow-md transition-all text-center flex flex-col justify-between">
-                                <div>
-                                    <div class="w-16 h-16 bg-blue-50 border border-blue-100 text-blue-600 rounded-2xl flex items-center justify-center text-2xl font-black mx-auto mb-4">
-                                        0${paslon.id}
-                                    </div>
-                                    <h3 class="text-lg font-bold text-slate-800">${paslon.nama}</h3>
-                                    <div class="text-left bg-slate-50 border border-slate-100 p-4 rounded-xl my-4 min-h-[120px]">
-                                        <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Visi & Misi</span>
-                                        <p class="text-slate-600 text-xs leading-relaxed whitespace-pre-line">${paslon.visi_misi}</p>
-                                    </div>
-                                </div>
-                                <button onclick="eksekusiVoting(${paslon.id})" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 rounded-xl shadow-md shadow-emerald-100 transition-all transform active:scale-[0.98]">
-                                    Coblos Paslon 0${paslon.id}
-                                </div>
+            res.data.forEach(paslon => {
+                htmlCard += `
+                    <div class="bg-white border border-slate-200/80 rounded-2xl p-6 shadow-sm hover:shadow-md transition-all text-center flex flex-col justify-between">
+                        <div>
+                            <div class="w-16 h-16 bg-blue-50 border border-blue-100 text-blue-600 rounded-2xl flex items-center justify-center text-2xl font-black mx-auto mb-4">
+                                0${paslon.id}
                             </div>
-                        `;
-                    });
-                    
-                    document.getElementById('container-kandidat').innerHTML = htmlCard;
-                    document.getElementById('box-identitas').classList.add('hidden');
-                    document.getElementById('box-bilik-suara').classList.remove('hidden');
-                }
-            })
-            .catch(err => {
-                alert(err.message);
-            })
-            .finally(() => {
-                btn.innerText = "Masuk ke Bilik Suara";
-                btn.disabled = false;
+                            <h3 class="text-lg font-bold text-slate-800">${paslon.nama}</h3>
+                            <div class="text-left bg-slate-50 border border-slate-100 p-4 rounded-xl my-4 min-h-[120px]">
+                                <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Visi & Misi</span>
+                                <p class="text-slate-600 text-xs leading-relaxed whitespace-pre-line">${paslon.visi_misi}</p>
+                            </div>
+                        </div>
+                        <button onclick="eksekusiVoting(${paslon.id})" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 rounded-xl shadow-md shadow-emerald-100 transition-all transform active:scale-[0.98]">
+                            Coblos Paslon 0${paslon.id}
+                        </button>
+                    </div>
+                `;
             });
+            
+            document.getElementById('container-kandidat').innerHTML = htmlCard;
+            document.getElementById('box-identitas').classList.add('hidden');
+            document.getElementById('box-bilik-suara').classList.remove('hidden');
         }
+    })
+    .catch(err => {
+        // Mengarahkan ke pesan solusi jika fetch gagal akibat CORS browser
+        alert(`Gagal Memuat Data.\n\nSolusi: Pastikan Setelan Deploy Apps Script Anda sudah diatur ke 'Anyone/Siapa Saja'.\n\nDetail Eror: ${err.message}`);
+    })
+    .finally(() => {
+        btn.innerText = "Masuk ke Bilik Suara";
+        btn.disabled = false;
+    });
+}
 
-        function eksekusiVoting(idPaslon) {
-            if(!confirm(`Apakah Anda yakin ingin memilih Paslon 0${idPaslon}? Pilihan tidak dapat diubah.`)) return;
+function eksekusiVoting(idPaslon) {
+    if(!confirm(`Apakah Anda yakin ingin memilih Paslon 0${idPaslon}? Pilihan tidak dapat diubah.`)) return;
 
-            // Kirim data voting ke backend POST
-            fetch(GAS_VOTING_URL, {
-                method: "POST",
-                redirect: "follow", // Memastikan mengikuti alur kirim Google
-                body: JSON.stringify({
-                    nis: nisPemilih,
-                    pilihan_id: idPaslon
-                })
-            })
-            .then(res => res.json())
-            .then(res => {
-                if(res.success) {
-                    alert("🎉 Terima kasih! Suara Anda telah berhasil direkam dalam basis data.");
-                    window.location.reload(); // Refresh halaman untuk membersihkan sesi pemilih
-                } else {
-                    // Blok ini akan menangkap respon jika NIS terdeteksi sudah memilih sebelumnya
-                    alert(`🚫 Akses Ditolak:\n${res.error}`);
-                    window.location.reload();
-                }
-            })
-            .catch(err => {
-                alert("Gagal mengirim suara ke server: " + err.message);
-            });
+    // Menggunakan teknik alternatif URLSearchParams jika POST JSON biasa diblokir di browser sekolah
+    fetch(GAS_VOTING_URL, {
+        method: "POST",
+        mode: "cors",
+        headers: {
+            "Content-Type": "text/plain;charset=utf-8" // Menggunakan text/plain menghindari pre-flight CORS blocks
+        },
+        body: JSON.stringify({
+            nis: nisPemilih,
+            pilihan_id: idPaslon
+        })
+    })
+    .then(res => res.json())
+    .then(res => {
+        if(res.success) {
+            alert("🎉 Terima kasih! Suara Anda telah berhasil direkam dalam basis data.");
+            window.location.reload();
+        } else {
+            alert(`🚫 Akses Ditolak:\n${res.error}`);
+            window.location.reload();
         }
+    })
+    .catch(err => {
+        alert("Gagal mengirim suara ke server: " + err.message);
+    });
+}
     </script>
 </body>
 </html>
